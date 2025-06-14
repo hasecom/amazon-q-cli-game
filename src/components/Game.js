@@ -1,21 +1,48 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import '../styles/Game.css';
 
-const Game = () => {
-  // 画数ごとの漢字の配列（1画から10画まで）
-  const kanjiByStrokeCount = [
-    ["一"], // 1画
-    ["二", "十"], // 2画
-    ["三", "土", "川", "山"], // 3画
-    ["四", "火", "水", "天", "月"], // 4画
-    ["五", "木", "王", "右", "左", "中"], // 5画
-    ["六", "石", "竹", "糸", "耳"], // 6画
-    ["七", "足", "見", "貝", "車"], // 7画
-    ["八", "金", "雨", "青", "草"], // 8画
-    ["九", "音", "風", "食", "飛"], // 9画
-    ["十", "馬", "魚", "鳥", "高"] // 10画
-  ];
+// 漢字データ（画数ごとに分類）
+const kanjiData = {
+  // 1画の漢字
+  1: ['一', '乙', '丨', '丶', '丿'],
   
+  // 2画の漢字
+  2: ['二', '十', '人', '入', '八', '几', '刀', '力', '又', '了'],
+  
+  // 3画の漢字
+  3: ['三', '上', '下', '口', '山', '千', '川', '土', '大', '女', '子', '小', '夕', '丸', '才', '亡', '工'],
+  
+  // 4画の漢字
+  4: ['四', '五', '六', '中', '手', '天', '日', '月', '木', '水', '火', '犬', '王', '正', '出', '本', '右', '左', '玉', '田', '白'],
+  
+  // 5画の漢字
+  5: ['円', '王', '玉', '石', '田', '白', '目', '立', '古', '外', '平', '半', '母', '北', '用', '矢', '生', '世', '主', '代', '冬'],
+  
+  // 6画の漢字
+  6: ['先', '名', '字', '年', '早', '気', '百', '竹', '糸', '耳', '虫', '村', '男', '町', '花', '見', '貝', '赤', '足', '車', '不'],
+  
+  // 7画の漢字
+  7: ['赤', '足', '村', '男', '町', '花', '見', '貝', '車', '何', '作', '体', '弟', '皿', '空', '金', '雨', '青', '音', '草', '麦'],
+  
+  // 8画の漢字
+  8: ['金', '雨', '青', '草', '音', '学', '空', '林', '社', '虫', '京', '国', '夜', '妹', '姉', '店', '明', '東', '歩', '画', '直'],
+  
+  // 9画の漢字
+  9: ['思', '星', '活', '海', '科', '室', '首', '秋', '家', '真', '時', '茶', '計', '食', '点', '風', '前', '後', '南', '点', '室'],
+  
+  // 10画の漢字
+  10: ['校', '高', '海', '活', '教', '馬', '魚', '鳥', '黄', '黒', '細', '週', '雪', '船', '組', '鳥', '料', '理', '野', '陽', '雲']
+};
+
+const Game = () => {
+  // ゲームの設定
+  const boardSize = 15; // ボードのサイズ
+  const cellSize = 40; // セルのサイズ（ピクセル）
+  const gameLoopRef = useRef(null);
+  const kanjiTimerRef = useRef(null);
+  const gameBoardRef = useRef(null);
+  const gameContainerRef = useRef(null);
+
   // ゲームの状態
   const [currentStrokeCount, setCurrentStrokeCount] = useState(1); // 現在の画数
   const [currentKanji, setCurrentKanji] = useState(""); // 現在取るべき漢字
@@ -32,527 +59,365 @@ const Game = () => {
   const [enemies, setEnemies] = useState([]);
   const [nextKanjiTimer, setNextKanjiTimer] = useState(null);
   const [kanjiActive, setKanjiActive] = useState(true); // 漢字が取得可能かどうか
-  
-  // ゲームボードのref
-  const gameBoardRef = useRef(null);
-  const gameContainerRef = useRef(null);
-  
-  // ゲームループのタイマー
-  const gameLoopRef = useRef(null);
-  const kanjiTimerRef = useRef(null);
-  
-  // ボードのサイズ
-  const boardSize = 15;
-  const cellSize = 50; // CSSのセルサイズと一致させる
-  const kanjiActivationDelay = 30000; // 漢字が次に取得可能になるまでの時間（30秒）
-  
-  // モバイルデバイスの検出
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
+  const [lastPlayerMoveTime, setLastPlayerMoveTime] = useState(0); // プレイヤーの最後の移動時間
+
+  // 指定された画数の漢字をランダムに選択する関数
+  const selectRandomKanji = useCallback((strokeCount) => {
+    // 指定された画数の漢字リストを取得
+    const kanjiList = kanjiData[strokeCount];
     
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
+    // 漢字リストが存在しない場合は空文字を返す
+    if (!kanjiList || kanjiList.length === 0) {
+      return '';
+    }
     
-    return () => {
-      window.removeEventListener('resize', checkMobile);
-    };
+    // ランダムなインデックスを生成
+    const randomIndex = Math.floor(Math.random() * kanjiList.length);
+    
+    // ランダムな漢字を返す
+    return kanjiList[randomIndex];
   }, []);
-  
-  // 対称的な迷路を生成する関数（アクセス可能なマップを保証）
-  const generateSymmetricalMaze = (size) => {
-    let maze;
-    let isAccessible;
-    
-    // アクセス可能なマップが生成されるまで繰り返す
-    do {
-      maze = Array(size).fill().map(() => Array(size).fill(null));
-      
-      // 外周を壁にする
-      for (let i = 0; i < size; i++) {
-        maze[0][i] = { type: 'wall' };
-        maze[size - 1][i] = { type: 'wall' };
-        maze[i][0] = { type: 'wall' };
-        maze[i][size - 1] = { type: 'wall' };
-      }
-      
-      // 中央に対称的な壁を配置（より多くの壁を配置）
-      const halfSize = Math.floor(size / 2);
-      
-      // 対称的なパターンを生成（四分の一のみ生成して残りは対称にコピー）
-      for (let y = 1; y < halfSize; y++) {
-        for (let x = 1; x < halfSize; x++) {
-          // ランダムに壁を配置（確率は調整可能、少し高めに）
-          if (Math.random() < 0.25 && !(x <= 2 && y <= 2)) {
-            // 四方向に対称的に壁を配置
-            maze[y][x] = { type: 'wall' };
-            maze[y][size - 1 - x] = { type: 'wall' };
-            maze[size - 1 - y][x] = { type: 'wall' };
-            maze[size - 1 - y][size - 1 - x] = { type: 'wall' };
-          }
-        }
-      }
-      
-      // マップ全体にアクセス可能かチェック
-      isAccessible = checkMapAccessibility(maze, size);
-      
-    } while (!isAccessible);
-    
-    return maze;
+
+  // 次に取るべき漢字を表示
+  const getNextKanjiText = () => {
+    if (currentStrokeCount > 10) {
+      return "すべて集めました！";
+    }
+    return `次の漢字: ${currentKanji}（${currentStrokeCount}画）`;
   };
   
-  // マップ全体にアクセス可能かチェックする関数（幅優先探索）
-  const checkMapAccessibility = (maze, size) => {
-    // 訪問済みのセルを記録する配列
-    const visited = Array(size).fill().map(() => Array(size).fill(false));
+  // 漢字が取得可能になるまでの残り時間を表示
+  const getTimerText = () => {
+    if (!nextKanjiTimer) return "";
     
-    // 開始位置（プレイヤーの初期位置）
-    const startX = 1;
-    const startY = 1;
-    visited[startY][startX] = true;
+    const remainingTime = Math.max(0, Math.ceil((nextKanjiTimer - Date.now()) / 1000));
+    return `次の漢字のヒントまで: ${remainingTime}秒`;
+  };
+
+  // セルのクラス名を取得
+  const getCellClassName = (cell, x, y) => {
+    let className = 'board-cell';
     
-    // 探索キュー
-    const queue = [{ x: startX, y: startY }];
-    
-    // 移動方向
-    const directions = [
-      { x: 0, y: -1 }, // 上
-      { x: 0, y: 1 },  // 下
-      { x: -1, y: 0 }, // 左
-      { x: 1, y: 0 }   // 右
-    ];
-    
-    // 空きセルの数をカウント
-    let emptyCells = 0;
-    let accessibleCells = 0;
-    
-    // 空きセルの数を数える
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        if (!maze[y][x] || maze[y][x].type !== 'wall') {
-          emptyCells++;
-        }
-      }
-    }
-    
-    // 幅優先探索
-    while (queue.length > 0) {
-      const current = queue.shift();
-      accessibleCells++;
+    if (!cell) {
+      className += ' empty';
+    } else if (cell.type === 'wall') {
+      className += ' wall';
+    } else if (cell.type === 'player') {
+      className += ' player';
+    } else if (cell.type === 'enemy') {
+      className += ' enemy';
+    } else if (cell.type === 'kanji') {
+      className += ' kanji';
       
-      // 4方向を探索
-      for (const dir of directions) {
-        const newX = current.x + dir.x;
-        const newY = current.y + dir.y;
-        
-        // 範囲内かつ未訪問かつ壁でない場合
-        if (
-          newX >= 0 && newX < size && 
-          newY >= 0 && newY < size && 
-          !visited[newY][newX] && 
-          (!maze[newY][newX] || maze[newY][newX].type !== 'wall')
-        ) {
-          visited[newY][newX] = true;
-          queue.push({ x: newX, y: newY });
-        }
+      // 現在の画数の漢字をハイライト
+      if (cell.strokeCount === currentStrokeCount) {
+        className += ' current';
+      }
+      
+      // 漢字がアクティブかどうか
+      if (cell.active) {
+        className += ' active';
       }
     }
     
-    // アクセス可能なセルの割合が90%以上であればOK
-    return accessibleCells / emptyCells >= 0.9;
+    // 移動可能なセルをハイライト
+    if (highlightCells.some(pos => pos.x === x && pos.y === y)) {
+      className += ' highlight';
+    }
+    
+    return className;
   };
   
-  // 敵を配置する関数
-  const placeEnemies = useCallback((board, playerPos, level) => {
-    const newEnemies = [];
-    // レベルに応じて敵の数を調整（レベル1では2体）
-    const enemyCount = level === 1 ? 2 : Math.min(level, 4);
-    
-    // 敵の初期位置（ボード内の特定の位置）
-    const possiblePositions = [];
-    
-    // ボード内の空きマスを探す
-    for (let y = 0; y < boardSize; y++) {
-      for (let x = 0; x < boardSize; x++) {
-        // プレイヤーから離れた位置（距離が5以上）かつ壁でない場所
-        const distanceToPlayer = Math.abs(x - playerPos.x) + Math.abs(y - playerPos.y);
-        if (distanceToPlayer >= 5 && !board[y][x] && 
-            x > 0 && x < boardSize - 1 && y > 0 && y < boardSize - 1) {
-          possiblePositions.push({ x, y });
-        }
-      }
+  // セルの内容を取得
+  const getCellContent = (cell) => {
+    if (!cell) {
+      return '';
     }
     
-    // 敵を配置
-    for (let i = 0; i < enemyCount; i++) {
-      if (possiblePositions.length > 0) {
-        // ランダムな位置を選択
-        const randomIndex = Math.floor(Math.random() * possiblePositions.length);
-        const position = possiblePositions[randomIndex];
-        
-        // 選択した位置を配列から削除（同じ位置に複数の敵を置かないため）
-        possiblePositions.splice(randomIndex, 1);
-        
-        // 敵をボードに配置
-        board[position.y][position.x] = { 
-          type: 'enemy',
-          speed: Math.random() < 0.3 ? 2 : 1 // 30%の確率で速い敵
-        };
-        
-        // 敵の情報を保存
-        newEnemies.push({ 
-          x: position.x, 
-          y: position.y, 
-          active: true,
-          speed: Math.random() < 0.3 ? 2 : 1
-        });
-      }
+    switch (cell.type) {
+      case 'wall':
+        return '■';
+      case 'player':
+        return '私';
+      case 'enemy':
+        return '敵';
+      case 'kanji':
+        return cell.value;
+      default:
+        return '';
+    }
+  };
+
+  // 表示するボードを取得
+  const getVisibleBoard = useCallback(() => {
+    if (!isMobile || !gameBoard || gameBoard.length === 0) {
+      return gameBoard;
     }
     
-    return newEnemies;
-  }, [boardSize]);
+    const viewportWidth = Math.min(7, boardSize);
+    const viewportHeight = Math.min(7, boardSize);
+    
+    // 配列の範囲外アクセスを防ぐ
+    const startY = Math.max(0, Math.min(viewportOffset.y, gameBoard.length - viewportHeight));
+    const endY = Math.min(startY + viewportHeight, gameBoard.length);
+    
+    try {
+      const visibleRows = gameBoard.slice(startY, endY);
+      
+      return visibleRows.map(row => {
+        if (!row) return Array(viewportWidth).fill(null);
+        const startX = Math.max(0, Math.min(viewportOffset.x, row.length - viewportWidth));
+        const endX = Math.min(startX + viewportWidth, row.length);
+        return row.slice(startX, endX);
+      });
+    } catch (error) {
+      console.error("ビジブルボード計算エラー:", error);
+      return Array(viewportHeight).fill().map(() => Array(viewportWidth).fill(null));
+    }
+  }, [gameBoard, boardSize, isMobile, viewportOffset]);
   
-  // 移動可能なセルをハイライト
+  // 移動可能なセルを更新
   const updateHighlightCells = useCallback((position) => {
     if (!gameBoard || gameBoard.length === 0) return;
     
+    const { x, y } = position;
     const cells = [];
+    
+    // 上下左右のセルをチェック
     const directions = [
-      { x: 0, y: -1 }, // 上
-      { x: 0, y: 1 },  // 下
-      { x: -1, y: 0 }, // 左
-      { x: 1, y: 0 }   // 右
+      { dx: 0, dy: -1 }, // 上
+      { dx: 0, dy: 1 },  // 下
+      { dx: -1, dy: 0 }, // 左
+      { dx: 1, dy: 0 }   // 右
     ];
     
-    directions.forEach(dir => {
-      const newX = position.x + dir.x;
-      const newY = position.y + dir.y;
+    for (const dir of directions) {
+      const newX = x + dir.dx;
+      const newY = y + dir.dy;
       
-      // ボード内かつ壁でない場合
+      // ボード内かつ壁でない場所
       if (
         newX >= 0 && 
         newX < boardSize && 
         newY >= 0 && 
         newY < boardSize && 
+        gameBoard && 
         gameBoard[newY] && 
-        (!gameBoard[newY][newX] || 
-         (gameBoard[newY][newX].type !== 'wall' && gameBoard[newY][newX].type !== 'enemy'))
+        (!gameBoard[newY][newX] || gameBoard[newY][newX].type !== 'wall')
       ) {
         cells.push({ x: newX, y: newY });
       }
-    });
+    }
     
     setHighlightCells(cells);
-  }, [gameBoard, boardSize]);
-  
-  // 次の漢字をランダムに選択する関数
-  const selectRandomKanji = useCallback((strokeCount) => {
-    if (strokeCount > kanjiByStrokeCount.length) {
-      return null; // すべての画数の漢字を取得した場合
-    }
-    
-    const availableKanji = kanjiByStrokeCount[strokeCount - 1];
-    const randomIndex = Math.floor(Math.random() * availableKanji.length);
-    return availableKanji[randomIndex];
-  }, [kanjiByStrokeCount]);
-  
-  // 漢字の取得タイマーを設定する関数
+  }, [boardSize, gameBoard]);
+
+  // 漢字のヒントタイマーを開始
   const startKanjiTimer = useCallback(() => {
-    if (kanjiTimerRef.current) {
-      clearTimeout(kanjiTimerRef.current);
-    }
-    
-    setKanjiActive(false); // ヒントを非表示にする
-    
-    kanjiTimerRef.current = setTimeout(() => {
-      setKanjiActive(true); // 30秒後にヒントを表示する
-    }, kanjiActivationDelay);
-    
-    // タイマーの残り時間を表示するための状態を更新
-    setNextKanjiTimer(Date.now() + kanjiActivationDelay);
-  }, [kanjiActivationDelay]);
-  
-  // 新しいレベルの初期化
-  const initializeLevel = useCallback(() => {
-    // 対称的な迷路を生成
-    const newBoard = generateSymmetricalMaze(boardSize);
-    
-    // 最初の画数を設定
-    setCurrentStrokeCount(1);
-    
-    // 最初の漢字を選択
-    const firstKanji = selectRandomKanji(1);
-    setCurrentKanji(firstKanji);
-    
-    // 各画数の漢字を1つずつ配置
-    const maxStrokeCount = Math.min(10, level + 4); // レベルに応じて最大画数を調整
-    let placedKanji = 0;
-    setRemainingKanji(maxStrokeCount);
-    
-    for (let strokeCount = 1; strokeCount <= maxStrokeCount; strokeCount++) {
-      let placed = false;
-      let attempts = 0;
-      
-      while (!placed && attempts < 100) {
-        attempts++;
-        const x = Math.floor(Math.random() * (boardSize - 2)) + 1;
-        const y = Math.floor(Math.random() * (boardSize - 2)) + 1;
-        
-        // プレイヤーの初期位置や壁には漢字を置かない
-        if ((x !== 1 || y !== 1) && !newBoard[y][x]) {
-          // その画数からランダムに漢字を選択
-          const kanji = selectRandomKanji(strokeCount);
-          newBoard[y][x] = { 
-            type: 'kanji', 
-            value: kanji, 
-            strokeCount: strokeCount,
-            active: strokeCount === 1 // 最初の漢字だけアクティブ
-          };
-          placed = true;
-          placedKanji++;
-        }
-      }
-    }
-    
-    // プレイヤーの配置
-    newBoard[1][1] = { type: 'player' };
-    const playerPos = { x: 1, y: 1 };
-    setPlayerPosition(playerPos);
-    
-    // 敵の配置（ステージ外）
-    const newEnemies = placeEnemies(newBoard, playerPos, level);
-    setEnemies(newEnemies);
-    
-    setGameBoard(newBoard);
-    setGameOver(false);
-    setGameWon(false);
-    setKanjiActive(true); // 最初の漢字はアクティブ
-    
-    // ビューポートオフセットをリセット
-    setViewportOffset({ x: 0, y: 0 });
-    
-    // タイマーをクリア
+    // 既存のタイマーをクリア
     if (kanjiTimerRef.current) {
       clearTimeout(kanjiTimerRef.current);
       kanjiTimerRef.current = null;
     }
-    setNextKanjiTimer(null);
-  }, [level, boardSize, placeEnemies, selectRandomKanji]);
-  
-  // ゲーム開始時に初期化
-  useEffect(() => {
-    initializeLevel();
     
-    // ゲームループのクリーンアップ
-    return () => {
-      if (gameLoopRef.current) {
-        clearInterval(gameLoopRef.current);
-      }
-      if (kanjiTimerRef.current) {
-        clearTimeout(kanjiTimerRef.current);
-      }
-    };
+    // 30秒後に漢字をアクティブにする
+    const timerDuration = 30000; // 30秒
+    setNextKanjiTimer(Date.now() + timerDuration);
+    
+    // 漢字を非アクティブに設定
+    setKanjiActive(false);
+    
+    // タイマーを設定
+    kanjiTimerRef.current = setTimeout(() => {
+      setKanjiActive(true);
+      setNextKanjiTimer(null);
+    }, timerDuration);
   }, []);
-  
-  // タイマーの残り時間を更新する
-  useEffect(() => {
-    if (!nextKanjiTimer || gameOver || gameWon) return;
+
+  // 敵を配置する関数
+  const placeEnemies = useCallback((board, playerPos, level) => {
+    const enemies = [];
+    const enemyCount = Math.min(2 + level - 1, 4); // レベルに応じて敵の数を増やす（最大4体）
     
-    const interval = setInterval(() => {
-      const now = Date.now();
-      if (now >= nextKanjiTimer) {
-        setNextKanjiTimer(null);
-        clearInterval(interval);
-      } else {
-        // 強制的に再レンダリングさせるために空の更新を行う
-        setNextKanjiTimer(nextKanjiTimer);
-      }
-    }, 1000);
-    
-    return () => clearInterval(interval);
-  }, [nextKanjiTimer, gameOver, gameWon]);
-  
-  // ゲームボードが更新されたら移動可能なセルを更新
-  useEffect(() => {
-    if (gameBoard && gameBoard.length > 0 && playerPosition) {
-      updateHighlightCells(playerPosition);
-    }
-  }, [gameBoard, playerPosition, updateHighlightCells]);
-  
-  // プレイヤーの位置が変わったらビューポートを更新（モバイル用）
-  useEffect(() => {
-    if (isMobile && gameBoard && gameBoard.length > 0) {
-      // ビューポートの中心にプレイヤーを配置
-      const viewportWidth = Math.min(7, boardSize); // 表示する幅（セル数）
-      const viewportHeight = Math.min(7, boardSize); // 表示する高さ（セル数）
+    for (let i = 0; i < enemyCount; i++) {
+      let placed = false;
+      let attempts = 0;
+      let enemy = { x: 0, y: 0, speed: 1 };
       
-      // プレイヤーを中心にするためのオフセットを計算
-      let offsetX = playerPosition.x - Math.floor(viewportWidth / 2);
-      let offsetY = playerPosition.y - Math.floor(viewportHeight / 2);
-      
-      // オフセットが範囲外にならないように調整
-      offsetX = Math.max(0, Math.min(offsetX, boardSize - viewportWidth));
-      offsetY = Math.max(0, Math.min(offsetY, boardSize - viewportHeight));
-      
-      setViewportOffset({ x: offsetX, y: offsetY });
-      
-      // 移動可能なセルを更新
-      updateHighlightCells(playerPosition);
-    }
-  }, [playerPosition, isMobile, gameBoard, boardSize, updateHighlightCells]);
-  
-  // 敵の移動ロジック
-  const moveEnemies = useCallback(() => {
-    if (gameOver || gameWon || !gameBoard || gameBoard.length === 0) return;
-    
-    // 現在のゲームボードの状態をコピー
-    const newBoard = [...gameBoard];
-    const newEnemies = [...enemies];
-    
-    for (let i = 0; i < newEnemies.length; i++) {
-      const enemy = newEnemies[i];
-      
-      // 現在の敵の位置をボードから削除
-      if (
-        enemy.x >= 0 && 
-        enemy.x < boardSize && 
-        enemy.y >= 0 && 
-        enemy.y < boardSize &&
-        newBoard[enemy.y][enemy.x] && 
-        newBoard[enemy.y][enemy.x].type === 'enemy'
-      ) {
-        // 敵が漢字の上にいた場合、漢字を復元
-        if (newBoard[enemy.y][enemy.x].onKanji) {
-          newBoard[enemy.y][enemy.x] = newBoard[enemy.y][enemy.x].onKanji;
-        } else {
-          newBoard[enemy.y][enemy.x] = null;
+      // プレイヤーから一定距離離れた場所に敵を配置
+      while (!placed && attempts < 100) {
+        attempts++;
+        const x = Math.floor(Math.random() * boardSize);
+        const y = Math.floor(Math.random() * boardSize);
+        
+        // プレイヤーから最低3マス離れた場所に配置（距離を短くする）
+        const distance = Math.abs(x - playerPos.x) + Math.abs(y - playerPos.y);
+        
+        if (distance >= 3 && x > 0 && x < boardSize - 1 && y > 0 && y < boardSize - 1 && !board[y][x]) {
+          enemy = { x, y, speed: 1 };
+          board[y][x] = { type: 'enemy', speed: 1 };
+          placed = true;
         }
       }
       
-      // 移動方向の候補
-      const directions = [
-        { x: 0, y: -1, weight: 1 }, // 上
-        { x: 0, y: 1, weight: 1 },  // 下
-        { x: -1, y: 0, weight: 1 }, // 左
-        { x: 1, y: 0, weight: 1 }   // 右
-      ];
-      
-      // プレイヤーに近づく方向の重みを増やす
-      directions.forEach(dir => {
-        const newX = enemy.x + dir.x;
-        const newY = enemy.y + dir.y;
-        
-        // プレイヤーに近づく方向なら重みを増やす
-        if (
-          Math.abs(newX - playerPosition.x) < Math.abs(enemy.x - playerPosition.x) ||
-          Math.abs(newY - playerPosition.y) < Math.abs(enemy.y - playerPosition.y)
-        ) {
-          dir.weight = 5; // プレイヤーに近づく方向の重みを増加
+      // 配置できなかった場合は、強制的に空いている場所に配置
+      if (!placed) {
+        for (let y = 1; y < boardSize - 1; y++) {
+          for (let x = 1; x < boardSize - 1; x++) {
+            const distance = Math.abs(x - playerPos.x) + Math.abs(y - playerPos.y);
+            if (distance >= 2 && !board[y][x]) {
+              enemy = { x, y, speed: 1 };
+              board[y][x] = { type: 'enemy', speed: 1 };
+              placed = true;
+              break;
+            }
+          }
+          if (placed) break;
         }
-      });
+      }
       
-      // 有効な移動先をフィルタリング
-      const validDirections = directions.filter(dir => {
-        const newX = enemy.x + dir.x;
-        const newY = enemy.y + dir.y;
-        
-        // ボード内かつ壁でなく、他の敵もいない場所
-        if (
-          newX >= 0 && 
-          newX < boardSize && 
-          newY >= 0 && 
-          newY < boardSize
-        ) {
-          const cell = newBoard[newY][newX];
-          return (
-            !cell || 
-            (cell.type !== 'wall' && cell.type !== 'enemy') ||
-            (cell.type === 'player') // プレイヤーのいる場所には移動可能
-          );
-        }
-        
-        return false;
-      });
-      
-      // 移動先がある場合
-      if (validDirections.length > 0) {
-        // 重み付き確率で方向を選択
-        const totalWeight = validDirections.reduce((sum, dir) => sum + dir.weight, 0);
-        let random = Math.random() * totalWeight;
-        let selectedDir = validDirections[0];
-        
-        for (const dir of validDirections) {
-          random -= dir.weight;
-          if (random <= 0) {
-            selectedDir = dir;
-            break;
+      enemies.push(enemy);
+    }
+    
+    return enemies;
+  }, []);
+
+  // 対称的な迷路を生成する関数
+  const generateSymmetricalMaze = useCallback(() => {
+    const maze = Array(boardSize).fill().map(() => Array(boardSize).fill(null));
+    
+    // 外周を壁にする
+    for (let i = 0; i < boardSize; i++) {
+      maze[0][i] = { type: 'wall' };
+      maze[boardSize - 1][i] = { type: 'wall' };
+      maze[i][0] = { type: 'wall' };
+      maze[i][boardSize - 1] = { type: 'wall' };
+    }
+    
+    // ランダムに壁を配置（対称的に）
+    for (let y = 1; y < boardSize - 1; y++) {
+      for (let x = 1; x < boardSize - 1; x++) {
+        // 左上の1/4だけ処理し、他の部分は対称的にコピー
+        if (x <= boardSize / 2 && y <= boardSize / 2) {
+          // プレイヤーの初期位置 (1,1) には壁を置かない
+          if (x === 1 && y === 1) continue;
+          
+          // 15%の確率で壁を配置（確率を下げて壁を少なくする）
+          if (Math.random() < 0.15) {
+            maze[y][x] = { type: 'wall' };
+            
+            // 対称的に壁を配置
+            maze[y][boardSize - 1 - x] = { type: 'wall' }; // 左右対称
+            maze[boardSize - 1 - y][x] = { type: 'wall' }; // 上下対称
+            maze[boardSize - 1 - y][boardSize - 1 - x] = { type: 'wall' }; // 対角対称
           }
         }
-        
-        const newX = enemy.x + selectedDir.x;
-        const newY = enemy.y + selectedDir.y;
-        
-        // プレイヤーに当たった場合
-        if (newX === playerPosition.x && newY === playerPosition.y) {
-          setGameOver(true);
-          return;
-        }
-        
-        // 移動先のセルを保存
-        const targetCell = newBoard[newY][newX];
-        
-        // 敵を新しい位置に移動
-        newEnemies[i] = { ...enemy, x: newX, y: newY };
-        
-        // 移動先に漢字がある場合は、敵が漢字の上に乗る（漢字は消さない）
-        if (targetCell && targetCell.type === 'kanji') {
-          newBoard[newY][newX] = { 
-            type: 'enemy',
-            speed: enemy.speed,
-            onKanji: targetCell // 漢字の情報を保持
-          };
-        } else {
-          newBoard[newY][newX] = { 
-            type: 'enemy',
-            speed: enemy.speed
-          };
-        }
-      } else {
-        // 移動できない場合は元の位置に戻す
-        newBoard[enemy.y][enemy.x] = { 
-          type: 'enemy',
-          speed: enemy.speed
-        };
       }
     }
     
-    setEnemies(newEnemies);
-    setGameBoard(newBoard);
-  }, [gameBoard, playerPosition, boardSize, enemies, gameOver, gameWon]);
-  
-  // ゲームループの設定
-  useEffect(() => {
-    if (gameLoopRef.current) {
-      clearInterval(gameLoopRef.current);
-    }
+    // 簡易的なアクセス可能性チェック（無限ループを防ぐため）
+    const isAccessible = simpleAccessibilityCheck(maze);
     
-    if (!gameOver && !gameWon) {
-      // 敵の移動を独立したタイマーで実行
-      gameLoopRef.current = setInterval(() => {
-        moveEnemies();
-      }, 500); // 0.5秒ごとに敵が移動
-    }
-    
-    return () => {
-      if (gameLoopRef.current) {
-        clearInterval(gameLoopRef.current);
+    // アクセスできない場合は、いくつかの壁を削除
+    if (!isAccessible) {
+      // 壁の位置をリストアップ
+      const walls = [];
+      for (let y = 1; y < boardSize - 1; y++) {
+        for (let x = 1; x < boardSize - 1; x++) {
+          if (maze[y][x] && maze[y][x].type === 'wall') {
+            walls.push({ x, y });
+          }
+        }
       }
-    };
-  }, [gameOver, gameWon, moveEnemies]); // isPlayerMovingとmoveEnemiesを依存配列から削除
+      
+      // ランダムに壁を20%削除
+      const removeCount = Math.max(1, Math.floor(walls.length * 0.2));
+      for (let i = 0; i < removeCount; i++) {
+        if (walls.length > 0) {
+          const index = Math.floor(Math.random() * walls.length);
+          const wall = walls[index];
+          
+          // 壁を削除
+          maze[wall.y][wall.x] = null;
+          
+          // 対称的に壁を削除
+          maze[wall.y][boardSize - 1 - wall.x] = null;
+          maze[boardSize - 1 - wall.y][wall.x] = null;
+          maze[boardSize - 1 - wall.y][boardSize - 1 - wall.x] = null;
+          
+          // 削除した壁をリストから削除
+          walls.splice(index, 1);
+        }
+      }
+    }
+    
+    return maze;
+  }, [boardSize]);
   
-  // プレイヤーの移動処理
-  const movePlayer = useCallback((newX, newY) => {
+  // 簡易的なアクセス可能性チェック（無限ループを防ぐため）
+  const simpleAccessibilityCheck = (maze) => {
+    // 訪問済みのセルを記録する配列
+    const visited = Array(boardSize).fill().map(() => Array(boardSize).fill(false));
+    
+    // 探索キュー
+    const queue = [{ x: 1, y: 1 }]; // プレイヤーの初期位置からスタート
+    visited[1][1] = true;
+    
+    // アクセス可能なセルの数
+    let accessibleCount = 1;
+    
+    // 方向ベクトル（上下左右）
+    const directions = [
+      { dx: 0, dy: -1 },
+      { dx: 0, dy: 1 },
+      { dx: -1, dy: 0 },
+      { dx: 1, dy: 0 }
+    ];
+    
+    // 最大100回のイテレーションに制限（無限ループ防止）
+    let iterations = 0;
+    const maxIterations = 100;
+    
+    while (queue.length > 0 && iterations < maxIterations) {
+      iterations++;
+      const current = queue.shift();
+      
+      // 隣接するセルを探索
+      for (const dir of directions) {
+        const nextX = current.x + dir.dx;
+        const nextY = current.y + dir.dy;
+        
+        // ボード内かつ未訪問かつ壁でない場所
+        if (
+          nextX >= 0 && 
+          nextX < boardSize && 
+          nextY >= 0 && 
+          nextY < boardSize && 
+          !visited[nextY][nextX] && 
+          (!maze[nextY][nextX] || maze[nextY][nextX].type !== 'wall')
+        ) {
+          visited[nextY][nextX] = true;
+          queue.push({ x: nextX, y: nextY });
+          accessibleCount++;
+        }
+      }
+    }
+    
+    // 全セルの数から壁の数を引いた値（アクセス可能なセルの理論値）
+    let totalAccessible = 0;
+    for (let y = 0; y < boardSize; y++) {
+      for (let x = 0; x < boardSize; x++) {
+        if (!maze[y][x] || maze[y][x].type !== 'wall') {
+          totalAccessible++;
+        }
+      }
+    }
+    
+    // アクセス可能なセルの割合が70%以上なら成功（基準を緩和）
+    return accessibleCount / totalAccessible >= 0.7;
+  };
+  // プレイヤーと敵を同時に移動させる関数
+  const movePlayerAndEnemies = useCallback((newX, newY) => {
     // 移動先が有効かチェック
     if (
       newX >= 0 && 
@@ -598,19 +463,6 @@ const Game = () => {
             setGameWon(true);
             return;
           }
-          
-          // 漢字を取得したらそのセルは空になる（漢字を消す）
-          const newBoard = [...gameBoard];
-          newBoard[playerPosition.y][playerPosition.x] = null;
-          newBoard[newY][newX] = { type: 'player' };
-          
-          setGameBoard(newBoard);
-          setPlayerPosition({ x: newX, y: newY });
-          
-          // 移動可能なセルを更新
-          updateHighlightCells({ x: newX, y: newY });
-          
-          return;
         } else {
           // 間違った画数の漢字を取ろうとした場合はゲームオーバー
           setGameOver(true);
@@ -618,22 +470,522 @@ const Game = () => {
         }
       }
       
-      // プレイヤーの移動
+      // 現在のゲームボードの状態をコピー
       const newBoard = [...gameBoard];
+      const newEnemies = [...enemies];
       
+      // 1. プレイヤーの移動
       // 現在位置のプレイヤーを削除
       newBoard[playerPosition.y][playerPosition.x] = null;
       
       // 新しい位置にプレイヤーを配置
       newBoard[newY][newX] = { type: 'player' };
       
+      // 2. 敵の移動
+      for (let i = 0; i < newEnemies.length; i++) {
+        const enemy = newEnemies[i];
+        
+        // 現在の敵の位置をボードから削除
+        if (
+          enemy.x >= 0 && 
+          enemy.x < boardSize && 
+          enemy.y >= 0 && 
+          enemy.y < boardSize &&
+          newBoard[enemy.y][enemy.x] && 
+          newBoard[enemy.y][enemy.x].type === 'enemy'
+        ) {
+          // 敵が漢字の上にいた場合、漢字を復元
+          if (newBoard[enemy.y][enemy.x].onKanji) {
+            newBoard[enemy.y][enemy.x] = newBoard[enemy.y][enemy.x].onKanji;
+          } else {
+            newBoard[enemy.y][enemy.x] = null;
+          }
+        }
+        
+        // プレイヤーに近づく最適な方向を見つける
+        let bestDirection = { x: 0, y: 0 };
+        let minDistance = Number.MAX_VALUE;
+        
+        // 可能な移動方向
+        const directions = [
+          { x: 0, y: -1 }, // 上
+          { x: 0, y: 1 },  // 下
+          { x: -1, y: 0 }, // 左
+          { x: 1, y: 0 }   // 右
+        ];
+        
+        // プレイヤーに最も近づく方向を選択（新しいプレイヤー位置に基づく）
+        for (const dir of directions) {
+          const nextX = enemy.x + dir.x;
+          const nextY = enemy.y + dir.y;
+          
+          // ボード内かつ壁でなく、他の敵もいない場所
+          if (
+            nextX >= 0 && 
+            nextX < boardSize && 
+            nextY >= 0 && 
+            nextY < boardSize
+          ) {
+            const cell = newBoard[nextY][nextX];
+            if (!cell || 
+                (cell.type !== 'wall' && cell.type !== 'enemy') || 
+                cell.type === 'player') {
+              
+              // 新しいプレイヤー位置までの距離を計算
+              const distance = Math.abs(nextX - newX) + Math.abs(nextY - newY);
+              
+              // より近い方向を選択
+              if (distance < minDistance) {
+                minDistance = distance;
+                bestDirection = dir;
+              }
+            }
+          }
+        }
+        
+        // 移動先の座標
+        const nextX = enemy.x + bestDirection.x;
+        const nextY = enemy.y + bestDirection.y;
+        
+        // 移動先が有効な場合のみ移動
+        if (
+          nextX >= 0 && 
+          nextX < boardSize && 
+          nextY >= 0 && 
+          nextY < boardSize
+        ) {
+          const targetCell = newBoard[nextY][nextX];
+          
+          // プレイヤーに当たった場合
+          if (targetCell && targetCell.type === 'player') {
+            setGameOver(true);
+            return;
+          }
+          
+          // 移動先が壁でなく、他の敵もいない場合
+          if (!targetCell || (targetCell.type !== 'wall' && targetCell.type !== 'enemy')) {
+            // 敵を新しい位置に移動
+            newEnemies[i] = { ...enemy, x: nextX, y: nextY };
+            
+            // 移動先に漢字がある場合は、敵が漢字の上に乗る（漢字は消さない）
+            if (targetCell && targetCell.type === 'kanji') {
+              newBoard[nextY][nextX] = { 
+                type: 'enemy',
+                speed: enemy.speed,
+                onKanji: targetCell // 漢字の情報を保持
+              };
+            } else {
+              newBoard[nextY][nextX] = { 
+                type: 'enemy',
+                speed: enemy.speed
+              };
+            }
+          } else {
+            // 移動できない場合は元の位置に戻す
+            newBoard[enemy.y][enemy.x] = { 
+              type: 'enemy',
+              speed: enemy.speed
+            };
+          }
+        } else {
+          // ボード外の場合は元の位置に戻す
+          newBoard[enemy.y][enemy.x] = { 
+            type: 'enemy',
+            speed: enemy.speed
+          };
+        }
+      }
+      
+      // 3. 状態を更新
       setGameBoard(newBoard);
       setPlayerPosition({ x: newX, y: newY });
+      setEnemies(newEnemies);
       
-      // 移動可能なセルを更新
+      // 4. 移動可能なセルを更新
       updateHighlightCells({ x: newX, y: newY });
+      
+      // 5. プレイヤーの最終移動時間を更新
+      setLastPlayerMoveTime(Date.now());
     }
-  }, [boardSize, gameBoard, playerPosition, currentStrokeCount, remainingKanji, score, selectRandomKanji, startKanjiTimer, updateHighlightCells]);
+  }, [
+    boardSize, 
+    gameBoard, 
+    playerPosition, 
+    enemies, 
+    currentStrokeCount, 
+    remainingKanji, 
+    score, 
+    selectRandomKanji, 
+    startKanjiTimer, 
+    updateHighlightCells
+  ]);
+  // レベルの初期化
+  const initializeLevel = useCallback(() => {
+    try {
+      console.log("レベル初期化開始:", level);
+      
+      // 迷路を生成
+      const newBoard = generateSymmetricalMaze();
+      
+      // 漢字を配置
+      let placedKanji = 0;
+      const kanjiCount = 10; // 各レベルで10個の漢字を配置
+      
+      // 1画から10画までの漢字を配置
+      for (let strokeCount = 1; strokeCount <= 10; strokeCount++) {
+        let placed = false;
+        let attempts = 0;
+        const maxAttempts = 100; // 最大試行回数を制限
+        
+        // 各画数の漢字を1つずつ配置
+        while (!placed && attempts < maxAttempts) {
+          attempts++;
+          const x = Math.floor(Math.random() * (boardSize - 2)) + 1;
+          const y = Math.floor(Math.random() * (boardSize - 2)) + 1;
+          
+          // プレイヤーの初期位置や壁には漢字を置かない
+          if ((x !== 1 || y !== 1) && !newBoard[y][x]) {
+            // その画数からランダムに漢字を選択
+            const kanji = selectRandomKanji(strokeCount);
+            newBoard[y][x] = { 
+              type: 'kanji', 
+              value: kanji, 
+              strokeCount: strokeCount,
+              active: strokeCount === 1 // 最初の漢字だけアクティブ
+            };
+            placed = true;
+            placedKanji++;
+          }
+        }
+        
+        // 配置できなかった場合は、強制的に空いている場所に配置
+        if (!placed) {
+          for (let y = 1; y < boardSize - 1; y++) {
+            for (let x = 1; x < boardSize - 1; x++) {
+              if ((x !== 1 || y !== 1) && !newBoard[y][x]) {
+                const kanji = selectRandomKanji(strokeCount);
+                newBoard[y][x] = { 
+                  type: 'kanji', 
+                  value: kanji, 
+                  strokeCount: strokeCount,
+                  active: strokeCount === 1
+                };
+                placed = true;
+                placedKanji++;
+                break;
+              }
+            }
+            if (placed) break;
+          }
+        }
+      }
+      
+      // プレイヤーの配置
+      newBoard[1][1] = { type: 'player' };
+      const playerPos = { x: 1, y: 1 };
+      
+      // 敵の配置
+      const newEnemies = placeEnemies(newBoard, playerPos, level);
+      
+      // 状態を一度にまとめて更新
+      setGameBoard(newBoard);
+      setPlayerPosition(playerPos);
+      setEnemies(newEnemies);
+      setGameOver(false);
+      setGameWon(false);
+      setKanjiActive(true); // 最初の漢字はアクティブ
+      setViewportOffset({ x: 0, y: 0 });
+      setCurrentStrokeCount(1);
+      setRemainingKanji(kanjiCount);
+      
+      // 最初の漢字を選択
+      const firstKanji = selectRandomKanji(1);
+      setCurrentKanji(firstKanji);
+      
+      // タイマーをクリア
+      if (kanjiTimerRef.current) {
+        clearTimeout(kanjiTimerRef.current);
+        kanjiTimerRef.current = null;
+      }
+      setNextKanjiTimer(null);
+      
+      // 移動可能なセルを更新（少し遅延させる）
+      setTimeout(() => {
+        updateHighlightCells(playerPos);
+      }, 100);
+      
+      console.log("レベル初期化完了:", level);
+    } catch (error) {
+      console.error("初期化中にエラーが発生しました:", error);
+      // 最小限の初期化を行う
+      const simpleBoard = Array(boardSize).fill().map(() => Array(boardSize).fill(null));
+      
+      // 外周を壁にする
+      for (let i = 0; i < boardSize; i++) {
+        simpleBoard[0][i] = { type: 'wall' };
+        simpleBoard[boardSize - 1][i] = { type: 'wall' };
+        simpleBoard[i][0] = { type: 'wall' };
+        simpleBoard[i][boardSize - 1] = { type: 'wall' };
+      }
+      
+      // プレイヤーを配置
+      simpleBoard[1][1] = { type: 'player' };
+      
+      // 漢字を1つ配置
+      const kanji = selectRandomKanji(1);
+      simpleBoard[2][2] = { type: 'kanji', value: kanji, strokeCount: 1, active: true };
+      
+      // 状態を更新
+      setGameBoard(simpleBoard);
+      setPlayerPosition({ x: 1, y: 1 });
+      setCurrentStrokeCount(1);
+      setCurrentKanji(kanji);
+      setRemainingKanji(10);
+      setEnemies([]);
+      setGameOver(false);
+      setGameWon(false);
+      setViewportOffset({ x: 0, y: 0 });
+    }
+  }, [level, boardSize, placeEnemies, selectRandomKanji, generateSymmetricalMaze, updateHighlightCells]);
+  // 敵の移動ロジック
+  const moveEnemies = useCallback(() => {
+    if (gameOver || gameWon || !gameBoard || gameBoard.length === 0) return;
+    
+    // 現在のゲームボードの状態をコピー
+    const newBoard = [...gameBoard];
+    const newEnemies = [...enemies];
+    let boardChanged = false;
+    
+    for (let i = 0; i < newEnemies.length; i++) {
+      const enemy = newEnemies[i];
+      
+      // 現在の敵の位置をボードから削除
+      if (
+        enemy.x >= 0 && 
+        enemy.x < boardSize && 
+        enemy.y >= 0 && 
+        enemy.y < boardSize &&
+        newBoard[enemy.y][enemy.x] && 
+        newBoard[enemy.y][enemy.x].type === 'enemy'
+      ) {
+        // 敵が漢字の上にいた場合、漢字を復元
+        if (newBoard[enemy.y][enemy.x].onKanji) {
+          newBoard[enemy.y][enemy.x] = newBoard[enemy.y][enemy.x].onKanji;
+        } else {
+          newBoard[enemy.y][enemy.x] = null;
+        }
+        boardChanged = true;
+      }
+      
+      // プレイヤーに近づく最適な方向を見つける
+      let bestDirection = { x: 0, y: 0 };
+      let minDistance = Number.MAX_VALUE;
+      
+      // 可能な移動方向
+      const directions = [
+        { x: 0, y: -1 }, // 上
+        { x: 0, y: 1 },  // 下
+        { x: -1, y: 0 }, // 左
+        { x: 1, y: 0 }   // 右
+      ];
+      
+      // プレイヤーに最も近づく方向を選択
+      for (const dir of directions) {
+        const newX = enemy.x + dir.x;
+        const newY = enemy.y + dir.y;
+        
+        // ボード内かつ壁でなく、他の敵もいない場所
+        if (
+          newX >= 0 && 
+          newX < boardSize && 
+          newY >= 0 && 
+          newY < boardSize
+        ) {
+          const cell = newBoard[newY][newX];
+          if (!cell || 
+              (cell.type !== 'wall' && cell.type !== 'enemy') || 
+              cell.type === 'player') {
+            
+            // プレイヤーまでの距離を計算
+            const distance = Math.abs(newX - playerPosition.x) + Math.abs(newY - playerPosition.y);
+            
+            // より近い方向を選択
+            if (distance < minDistance) {
+              minDistance = distance;
+              bestDirection = dir;
+            }
+          }
+        }
+      }
+      
+      // 移動先の座標
+      const newX = enemy.x + bestDirection.x;
+      const newY = enemy.y + bestDirection.y;
+      
+      // 移動先が有効な場合のみ移動
+      if (
+        newX >= 0 && 
+        newX < boardSize && 
+        newY >= 0 && 
+        newY < boardSize
+      ) {
+        const targetCell = newBoard[newY][newX];
+        
+        // プレイヤーに当たった場合
+        if (targetCell && targetCell.type === 'player') {
+          setGameOver(true);
+          return;
+        }
+        
+        // 移動先が壁でなく、他の敵もいない場合
+        if (!targetCell || (targetCell.type !== 'wall' && targetCell.type !== 'enemy')) {
+          // 敵を新しい位置に移動
+          newEnemies[i] = { ...enemy, x: newX, y: newY };
+          
+          // 移動先に漢字がある場合は、敵が漢字の上に乗る（漢字は消さない）
+          if (targetCell && targetCell.type === 'kanji') {
+            newBoard[newY][newX] = { 
+              type: 'enemy',
+              speed: enemy.speed,
+              onKanji: targetCell // 漢字の情報を保持
+            };
+          } else {
+            newBoard[newY][newX] = { 
+              type: 'enemy',
+              speed: enemy.speed
+            };
+          }
+          boardChanged = true;
+        } else {
+          // 移動できない場合は元の位置に戻す
+          newBoard[enemy.y][enemy.x] = { 
+            type: 'enemy',
+            speed: enemy.speed
+          };
+          boardChanged = true;
+        }
+      } else {
+        // ボード外の場合は元の位置に戻す
+        newBoard[enemy.y][enemy.x] = { 
+          type: 'enemy',
+          speed: enemy.speed
+        };
+        boardChanged = true;
+      }
+    }
+    
+    // 変更があった場合のみ状態を更新
+    if (boardChanged) {
+      setEnemies(newEnemies);
+      setGameBoard(newBoard);
+    }
+  }, [gameBoard, playerPosition, boardSize, enemies, gameOver, gameWon]);
+  // ゲームループの設定
+  useEffect(() => {
+    // 既存のゲームループをクリア
+    if (gameLoopRef.current) {
+      clearInterval(gameLoopRef.current);
+      gameLoopRef.current = null;
+    }
+    
+    // ゲームが終了していない場合のみゲームループを開始
+    if (!gameOver && !gameWon && gameBoard && gameBoard.length > 0) {
+      // 敵の移動を独立したタイマーで実行（プレイヤーが停止している時のみ）
+      gameLoopRef.current = setInterval(() => {
+        const currentTime = Date.now();
+        
+        // プレイヤーが移動した直後（300ms以内）は敵を動かさない
+        // これにより、プレイヤーの移動と敵の自動移動が重複しないようにする
+        if (currentTime - lastPlayerMoveTime > 300) {
+          moveEnemies();
+        }
+      }, 500); // 0.5秒ごとに敵が移動
+    }
+    
+    // クリーンアップ関数
+    return () => {
+      if (gameLoopRef.current) {
+        clearInterval(gameLoopRef.current);
+        gameLoopRef.current = null;
+      }
+    };
+  }, [gameOver, gameWon, moveEnemies, lastPlayerMoveTime, gameBoard]);
+  
+  // ゲーム開始時に初期化
+  useEffect(() => {
+    // 既存のタイマーをクリア
+    if (gameLoopRef.current) {
+      clearInterval(gameLoopRef.current);
+      gameLoopRef.current = null;
+    }
+    if (kanjiTimerRef.current) {
+      clearTimeout(kanjiTimerRef.current);
+      kanjiTimerRef.current = null;
+    }
+    
+    // 初期化を一度だけ実行
+    try {
+      initializeLevel();
+    } catch (error) {
+      console.error("初期化中にエラーが発生しました:", error);
+    }
+    
+    // クリーンアップ
+    return () => {
+      if (gameLoopRef.current) {
+        clearInterval(gameLoopRef.current);
+        gameLoopRef.current = null;
+      }
+      if (kanjiTimerRef.current) {
+        clearTimeout(kanjiTimerRef.current);
+        kanjiTimerRef.current = null;
+      }
+    };
+  }, []);
+  
+  // レベル変更時の初期化
+  useEffect(() => {
+    // 初回レンダリング時はスキップ
+    if (level > 1) {
+      try {
+        initializeLevel();
+      } catch (error) {
+        console.error("レベル変更時の初期化エラー:", error);
+      }
+    }
+  }, [level, initializeLevel]);
+  
+  // モバイル判定
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
+  }, []);
+  
+  // ビューポートの更新（モバイル用）
+  useEffect(() => {
+    if (!isMobile || !gameBoard || !playerPosition) return;
+    
+    // ビューポートの幅と高さを計算
+    const viewportWidth = Math.min(7, boardSize);
+    const viewportHeight = Math.min(7, boardSize);
+    
+    // プレイヤーが中央に来るようにビューポートを調整
+    const offsetX = Math.max(0, Math.min(playerPosition.x - Math.floor(viewportWidth / 2), boardSize - viewportWidth));
+    const offsetY = Math.max(0, Math.min(playerPosition.y - Math.floor(viewportHeight / 2), boardSize - viewportHeight));
+    
+    // 前回と異なる場合のみ更新
+    if (offsetX !== viewportOffset.x || offsetY !== viewportOffset.y) {
+      setViewportOffset({ x: offsetX, y: offsetY });
+    }
+  }, [isMobile, gameBoard, playerPosition, boardSize, viewportOffset]);
   
   // キー入力の処理
   useEffect(() => {
@@ -664,7 +1016,8 @@ const Game = () => {
           return;
       }
       
-      movePlayer(newX, newY);
+      // プレイヤーと敵を同時に移動
+      movePlayerAndEnemies(newX, newY);
     };
     
     // グローバルなキーボードイベントを追加
@@ -673,7 +1026,7 @@ const Game = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [gameOver, gameWon, playerPosition, movePlayer]);
+  }, [gameOver, gameWon, playerPosition, movePlayerAndEnemies]);
   
   // モバイル用の方向タップハンドラ
   const handleDirectionTap = useCallback((direction) => {
@@ -699,8 +1052,9 @@ const Game = () => {
         return;
     }
     
-    movePlayer(newX, newY);
-  }, [gameOver, gameWon, playerPosition, movePlayer]);
+    // プレイヤーと敵を同時に移動
+    movePlayerAndEnemies(newX, newY);
+  }, [gameOver, gameWon, playerPosition, movePlayerAndEnemies]);
   
   // ゲームボードのクリックハンドラ
   const handleBoardClick = useCallback((e) => {
@@ -723,123 +1077,68 @@ const Game = () => {
       
       // 隣接するセルのみ移動可能
       if ((Math.abs(dx) === 1 && dy === 0) || (dx === 0 && Math.abs(dy) === 1)) {
-        movePlayer(cellX, cellY);
+        // プレイヤーと敵を同時に移動
+        movePlayerAndEnemies(cellX, cellY);
       }
     }
-  }, [isMobile, gameOver, gameWon, playerPosition, viewportOffset, cellSize, movePlayer]);
+  }, [isMobile, gameOver, gameWon, playerPosition, viewportOffset, cellSize, movePlayerAndEnemies]);
   
   // 次のレベルへ
-  const nextLevel = () => {
-    setLevel(level + 1);
-    initializeLevel();
-  };
+  const nextLevel = useCallback(() => {
+    setLevel(prevLevel => prevLevel + 1);
+    
+    // 既存のタイマーをクリア
+    if (gameLoopRef.current) {
+      clearInterval(gameLoopRef.current);
+      gameLoopRef.current = null;
+    }
+    if (kanjiTimerRef.current) {
+      clearTimeout(kanjiTimerRef.current);
+      kanjiTimerRef.current = null;
+    }
+    
+    // 初期化を実行
+    setTimeout(() => {
+      try {
+        initializeLevel();
+      } catch (error) {
+        console.error("レベル初期化中にエラーが発生しました:", error);
+      }
+    }, 100);
+  }, []);
   
   // リスタート
-  const restart = () => {
+  const restart = useCallback(() => {
     setLevel(1);
     setScore(0);
-    initializeLevel();
-  };
-  
-  // セルのクラス名を決定する関数
-  const getCellClassName = (cell, x, y) => {
-    let className = `board-cell ${cell ? cell.type : 'empty'}`;
     
-    // 移動可能なセルをハイライト
-    if (!cell && highlightCells.some(pos => pos.x === x && pos.y === y)) {
-      className += ' highlight';
+    // 既存のタイマーをクリア
+    if (gameLoopRef.current) {
+      clearInterval(gameLoopRef.current);
+      gameLoopRef.current = null;
+    }
+    if (kanjiTimerRef.current) {
+      clearTimeout(kanjiTimerRef.current);
+      kanjiTimerRef.current = null;
     }
     
-    // 次に取るべき漢字をハイライト（ヒントがアクティブな場合のみ）
-    if (cell && cell.type === 'kanji' && cell.strokeCount === currentStrokeCount && kanjiActive) {
-      className += ' next-kanji';
-    }
-    
-    // 速い敵の場合はクラスを追加
-    if (cell && cell.type === 'enemy' && cell.speed === 2) {
-      className += ' fast';
-    }
-    
-    return className;
-  };
-  
-  // セルの内容を決定する関数
-  const getCellContent = (cell) => {
-    if (!cell) return '';
-    
-    switch (cell.type) {
-      case 'player':
-        return '私';
-      case 'enemy':
-        return '敵';
-      case 'kanji':
-        return cell.value;
-      default:
-        return '';
-    }
-  };
-  
-  // モバイル用のビューポート内のセルのみを表示
-  const getVisibleBoard = () => {
-    if (!isMobile || !gameBoard || gameBoard.length === 0) {
-      return gameBoard;
-    }
-    
-    const viewportWidth = Math.min(7, boardSize);
-    const viewportHeight = Math.min(7, boardSize);
-    
-    // 配列の範囲外アクセスを防ぐ
-    const startY = Math.min(viewportOffset.y, gameBoard.length - viewportHeight);
-    const endY = Math.min(startY + viewportHeight, gameBoard.length);
-    
-    const visibleRows = gameBoard.slice(startY, endY);
-    
-    return visibleRows.map(row => {
-      const startX = Math.min(viewportOffset.x, row.length - viewportWidth);
-      const endX = Math.min(startX + viewportWidth, row.length);
-      return row.slice(startX, endX);
-    });
-  };
-  
-  const visibleBoard = getVisibleBoard();
-  
-  // 次に取るべき漢字を表示
-  const getNextKanjiText = () => {
-    if (currentStrokeCount > 10) {
-      return "すべて集めました！";
-    }
-    return `次の漢字: ${currentKanji}（${currentStrokeCount}画）`;
-  };
-  
-  // 漢字が取得可能になるまでの残り時間を表示
-  const getTimerText = () => {
-    if (!nextKanjiTimer) return "";
-    
-    const remainingTime = Math.max(0, Math.ceil((nextKanjiTimer - Date.now()) / 1000));
-    return `次の漢字のヒントまで: ${remainingTime}秒`;
-  };
-  
-  // ゲームボードの初期化と自動フォーカス設定
-  useEffect(() => {
-    // ゲームボードにフォーカスを設定
-    if (gameBoardRef.current) {
-      gameBoardRef.current.focus();
-    }
-    
-    // すべてのキーボードイベントでのスクロールを防止
-    const preventScroll = (e) => {
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
-        e.preventDefault();
+    // 初期化を実行
+    setTimeout(() => {
+      try {
+        initializeLevel();
+      } catch (error) {
+        console.error("リスタート中にエラーが発生しました:", error);
       }
-    };
-    
-    window.addEventListener('keydown', preventScroll, { passive: false });
-    
-    return () => {
-      window.removeEventListener('keydown', preventScroll);
-    };
+    }, 100);
   }, []);
-
+  
+  // 表示するボードを計算
+  const visibleBoard = useMemo(() => {
+    if (!gameBoard || gameBoard.length === 0) {
+      return [];
+    }
+    return getVisibleBoard();
+  }, [getVisibleBoard, gameBoard]);
   return (
     <div className="game-container" ref={gameContainerRef}>
       <div className="game-info">
@@ -875,63 +1174,31 @@ const Game = () => {
         ))}
       </div>
       
-      {/* モバイル用の方向タップエリア */}
       {isMobile && (
-        <div className="direction-controls">
-          <div className="direction-row">
-            <div className="direction-spacer"></div>
-            <div 
-              className="direction-button up" 
-              onClick={() => handleDirectionTap('up')}
-            >
-              ↑
+        <div className="mobile-controls">
+          <div className="direction-buttons">
+            <button onClick={() => handleDirectionTap('up')}>↑</button>
+            <div className="horizontal-buttons">
+              <button onClick={() => handleDirectionTap('left')}>←</button>
+              <button onClick={() => handleDirectionTap('right')}>→</button>
             </div>
-            <div className="direction-spacer"></div>
-          </div>
-          <div className="direction-row">
-            <div 
-              className="direction-button left" 
-              onClick={() => handleDirectionTap('left')}
-            >
-              ←
-            </div>
-            <div className="direction-center"></div>
-            <div 
-              className="direction-button right" 
-              onClick={() => handleDirectionTap('right')}
-            >
-              →
-            </div>
-          </div>
-          <div className="direction-row">
-            <div className="direction-spacer"></div>
-            <div 
-              className="direction-button down" 
-              onClick={() => handleDirectionTap('down')}
-            >
-              ↓
-            </div>
-            <div className="direction-spacer"></div>
+            <button onClick={() => handleDirectionTap('down')}>↓</button>
           </div>
         </div>
       )}
       
       {gameOver && (
-        <div className="game-message">
-          <h2>ゲームオーバー！</h2>
-          <p>
-            {currentStrokeCount > 1 
-              ? `${currentStrokeCount - 1}画まで集めました。敵に捕まりました。` 
-              : "敵に捕まりました。"}
-          </p>
-          <button onClick={restart}>もう一度プレイ</button>
+        <div className="game-over-popup">
+          <h2>ゲームオーバー</h2>
+          <p>スコア: {score}</p>
+          <button onClick={restart}>リスタート</button>
         </div>
       )}
       
       {gameWon && (
-        <div className="game-message">
+        <div className="game-won-popup">
           <h2>レベルクリア！</h2>
-          <p>すべての漢字を集めました！</p>
+          <p>スコア: {score}</p>
           <button onClick={nextLevel}>次のレベルへ</button>
         </div>
       )}
@@ -945,13 +1212,19 @@ const Game = () => {
         <p>正しい漢字を取ると、その漢字は消えます。</p>
         <p>漢字を取ると、次の漢字のヒント（光る表示）は30秒後に表示されます。</p>
         <p>赤い「敵」キャラクターはプレイヤーを追いかけてきます。</p>
-        <p>敵は0.5秒ごとに1マス移動し、漢字の上も通過できます（漢字は消えません）。</p>
+        <p>敵はプレイヤーが動くと一緒に動き、停止中は0.5秒ごとに1マス移動します。</p>
         <p>敵に捕まるとゲームオーバーです。</p>
         <p>レベル1では敵は2体、レベルが上がるごとに敵の数が増えます（最大4体）。</p>
         <p>すべての漢字を集めるとレベルクリアです。</p>
       </div>
     </div>
   );
+};
+
+// レベル変更時の初期化用のuseEffect - コンポーネント内に移動
+const Game2 = () => {
+  // ダミーコンポーネント - 実際には使用しません
+  return null;
 };
 
 export default Game;
