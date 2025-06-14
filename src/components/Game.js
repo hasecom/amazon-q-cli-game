@@ -32,7 +32,6 @@ const Game = () => {
   const [enemies, setEnemies] = useState([]);
   const [nextKanjiTimer, setNextKanjiTimer] = useState(null);
   const [kanjiActive, setKanjiActive] = useState(true); // 漢字が取得可能かどうか
-  const [isPlayerMoving, setIsPlayerMoving] = useState(false); // プレイヤーが移動中かどうか
   
   // ゲームボードのref
   const gameBoardRef = useRef(null);
@@ -78,14 +77,14 @@ const Game = () => {
         maze[i][size - 1] = { type: 'wall' };
       }
       
-      // 中央に対称的な壁を配置（少し少なめに）
+      // 中央に対称的な壁を配置（より多くの壁を配置）
       const halfSize = Math.floor(size / 2);
       
       // 対称的なパターンを生成（四分の一のみ生成して残りは対称にコピー）
       for (let y = 1; y < halfSize; y++) {
         for (let x = 1; x < halfSize; x++) {
-          // ランダムに壁を配置（確率は調整可能、少し低めに）
-          if (Math.random() < 0.15 && !(x === 1 && y === 1)) {
+          // ランダムに壁を配置（確率は調整可能、少し高めに）
+          if (Math.random() < 0.25 && !(x <= 2 && y <= 2)) {
             // 四方向に対称的に壁を配置
             maze[y][x] = { type: 'wall' };
             maze[y][size - 1 - x] = { type: 'wall' };
@@ -397,20 +396,19 @@ const Game = () => {
       offsetY = Math.max(0, Math.min(offsetY, boardSize - viewportHeight));
       
       setViewportOffset({ x: offsetX, y: offsetY });
+      
+      // 移動可能なセルを更新
+      updateHighlightCells(playerPosition);
     }
-  }, [playerPosition, isMobile, gameBoard, boardSize]);
+  }, [playerPosition, isMobile, gameBoard, boardSize, updateHighlightCells]);
   
   // 敵の移動ロジック
   const moveEnemies = useCallback(() => {
     if (gameOver || gameWon || !gameBoard || gameBoard.length === 0) return;
     
-    // 現在のゲームボードの状態をディープコピー
-    const newBoard = JSON.parse(JSON.stringify(gameBoard));
+    // 現在のゲームボードの状態をコピー
+    const newBoard = [...gameBoard];
     const newEnemies = [...enemies];
-    
-    // プレイヤーの位置を確保
-    const playerX = playerPosition.x;
-    const playerY = playerPosition.y;
     
     for (let i = 0; i < newEnemies.length; i++) {
       const enemy = newEnemies[i];
@@ -447,8 +445,8 @@ const Game = () => {
         
         // プレイヤーに近づく方向なら重みを増やす
         if (
-          Math.abs(newX - playerX) < Math.abs(enemy.x - playerX) ||
-          Math.abs(newY - playerY) < Math.abs(enemy.y - playerY)
+          Math.abs(newX - playerPosition.x) < Math.abs(enemy.x - playerPosition.x) ||
+          Math.abs(newY - playerPosition.y) < Math.abs(enemy.y - playerPosition.y)
         ) {
           dir.weight = 5; // プレイヤーに近づく方向の重みを増加
         }
@@ -496,7 +494,7 @@ const Game = () => {
         const newY = enemy.y + selectedDir.y;
         
         // プレイヤーに当たった場合
-        if (newX === playerX && newY === playerY) {
+        if (newX === playerPosition.x && newY === playerPosition.y) {
           setGameOver(true);
           return;
         }
@@ -529,14 +527,9 @@ const Game = () => {
       }
     }
     
-    // プレイヤーの位置を確保
-    if (newBoard[playerY][playerX] === null || newBoard[playerY][playerX] === undefined) {
-      newBoard[playerY][playerX] = { type: 'player' };
-    }
-    
     setEnemies(newEnemies);
     setGameBoard(newBoard);
-  });
+  }, [gameBoard, playerPosition, boardSize, enemies, gameOver, gameWon]);
   
   // ゲームループの設定
   useEffect(() => {
@@ -547,10 +540,7 @@ const Game = () => {
     if (!gameOver && !gameWon) {
       // 敵の移動を独立したタイマーで実行
       gameLoopRef.current = setInterval(() => {
-        // プレイヤーの移動中は敵を動かさない
-        if (!isPlayerMoving) {
-          moveEnemies();
-        }
+        moveEnemies();
       }, 500); // 0.5秒ごとに敵が移動
     }
     
@@ -559,13 +549,10 @@ const Game = () => {
         clearInterval(gameLoopRef.current);
       }
     };
-  }, [gameOver, gameWon, isPlayerMoving, moveEnemies]); // moveEnemiesを依存配列から削除
+  }, [gameOver, gameWon, moveEnemies]); // isPlayerMovingとmoveEnemiesを依存配列から削除
   
   // プレイヤーの移動処理
   const movePlayer = useCallback((newX, newY) => {
-    // プレイヤー移動中フラグをセット
-    setIsPlayerMoving(true);
-    
     // 移動先が有効かチェック
     if (
       newX >= 0 && 
@@ -579,14 +566,12 @@ const Game = () => {
       
       // 壁には移動できない
       if (targetCell && targetCell.type === 'wall') {
-        setIsPlayerMoving(false);
         return;
       }
       
       // 敵のセルの場合
       if (targetCell && targetCell.type === 'enemy') {
         setGameOver(true);
-        setIsPlayerMoving(false);
         return;
       }
       
@@ -611,47 +596,44 @@ const Game = () => {
           // すべての漢字を集めたらレベルクリア
           if (remainingKanji - 1 <= 0) {
             setGameWon(true);
-            setIsPlayerMoving(false);
             return;
           }
           
           // 漢字を取得したらそのセルは空になる（漢字を消す）
-          const newBoard = [...gameBoard.map(row => [...row])];
+          const newBoard = [...gameBoard];
           newBoard[playerPosition.y][playerPosition.x] = null;
           newBoard[newY][newX] = { type: 'player' };
           
           setGameBoard(newBoard);
           setPlayerPosition({ x: newX, y: newY });
           
-          // 移動完了
-          setTimeout(() => {
-            setIsPlayerMoving(false);
-          }, 100);
+          // 移動可能なセルを更新
+          updateHighlightCells({ x: newX, y: newY });
+          
           return;
         } else {
           // 間違った画数の漢字を取ろうとした場合はゲームオーバー
           setGameOver(true);
-          setIsPlayerMoving(false);
           return;
         }
       }
       
       // プレイヤーの移動
-      const newBoard = [...gameBoard.map(row => [...row])];
+      const newBoard = [...gameBoard];
+      
+      // 現在位置のプレイヤーを削除
       newBoard[playerPosition.y][playerPosition.x] = null;
+      
+      // 新しい位置にプレイヤーを配置
       newBoard[newY][newX] = { type: 'player' };
       
       setGameBoard(newBoard);
       setPlayerPosition({ x: newX, y: newY });
       
-      // 移動完了
-      setTimeout(() => {
-        setIsPlayerMoving(false);
-      }, 100);
-    } else {
-      setIsPlayerMoving(false);
+      // 移動可能なセルを更新
+      updateHighlightCells({ x: newX, y: newY });
     }
-  }, [boardSize, gameBoard, playerPosition, currentStrokeCount, remainingKanji, score, selectRandomKanji, startKanjiTimer]);
+  }, [boardSize, gameBoard, playerPosition, currentStrokeCount, remainingKanji, score, selectRandomKanji, startKanjiTimer, updateHighlightCells]);
   
   // キー入力の処理
   useEffect(() => {
@@ -664,27 +646,30 @@ const Game = () => {
       switch (e.key) {
         case 'ArrowUp':
           newY--;
+          e.preventDefault();
           break;
         case 'ArrowDown':
           newY++;
+          e.preventDefault();
           break;
         case 'ArrowLeft':
           newX--;
+          e.preventDefault();
           break;
         case 'ArrowRight':
           newX++;
+          e.preventDefault();
           break;
         default:
           return;
       }
       
       movePlayer(newX, newY);
-      
-      // キー入力でのスクロールを防止
-      e.preventDefault();
     };
     
+    // グローバルなキーボードイベントを追加
     window.addEventListener('keydown', handleKeyDown);
+    
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
@@ -834,6 +819,27 @@ const Game = () => {
     return `次の漢字のヒントまで: ${remainingTime}秒`;
   };
   
+  // ゲームボードの初期化と自動フォーカス設定
+  useEffect(() => {
+    // ゲームボードにフォーカスを設定
+    if (gameBoardRef.current) {
+      gameBoardRef.current.focus();
+    }
+    
+    // すべてのキーボードイベントでのスクロールを防止
+    const preventScroll = (e) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
+        e.preventDefault();
+      }
+    };
+    
+    window.addEventListener('keydown', preventScroll, { passive: false });
+    
+    return () => {
+      window.removeEventListener('keydown', preventScroll);
+    };
+  }, []);
+
   return (
     <div className="game-container" ref={gameContainerRef}>
       <div className="game-info">
@@ -849,9 +855,10 @@ const Game = () => {
         ref={gameBoardRef}
         onClick={handleBoardClick}
         tabIndex="0"
+        style={{ gridTemplateRows: `repeat(${boardSize}, 40px)` }}
       >
         {visibleBoard && visibleBoard.length > 0 && visibleBoard.map((row, visibleY) => (
-          <div key={visibleY + viewportOffset.y} className="board-row">
+          <div key={visibleY + viewportOffset.y} className="board-row" style={{ display: 'contents' }}>
             {row.map((cell, visibleX) => (
               <div 
                 key={`${visibleX + viewportOffset.x}-${visibleY + viewportOffset.y}`} 

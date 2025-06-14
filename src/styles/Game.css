@@ -2,45 +2,39 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 5px;
-  max-width: 800px;
-  margin: 0 auto;
-  height: 100vh;
-  overflow-y: auto;
-  box-sizing: border-box;
-  background-color: #0a0a0a;
+  padding: 20px;
+  font-family: 'Noto Sans JP', sans-serif;
+  background-color: #000;
   color: #fff;
+  min-height: 100vh;
+}
+
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 20px;
 }
 
 .game-info {
   display: flex;
-  justify-content: space-between;
-  width: 100%;
-  margin-bottom: 10px;
-  font-size: 16px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 18px;
   text-shadow: 0 0 5px #0ff, 0 0 10px #0ff;
 }
 
-.game-info > div {
-  margin: 5px 10px;
-}
-
-.timer {
-  color: #ff00ff;
-  font-weight: bold;
-  text-shadow: 0 0 5px #ff00ff, 0 0 10px #ff00ff;
-}
-
 .game-board {
-  display: inline-block;
-  border: 2px solid #00ffff;
-  background-color: #0a0a0a;
-  box-shadow: 0 0 10px #00ffff, inset 0 0 10px #00ffff;
-}
-
-.board-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(15, 40px);
+  grid-template-rows: repeat(15, 40px);
+  gap: 1px;
+  margin-bottom: 20px;
+  border: 2px solid #0ff;
+  box-shadow: 0 0 10px #0ff, 0 0 20px #0ff;
+  background-color: #111;
+  outline: none; /* フォーカス時の枠線を削除 */
+  grid-auto-rows: 40px; /* 自動生成される行の高さを固定 */
 }
 
 .board-cell {
@@ -49,222 +43,225 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #333;
-  font-size: 22px;
-  user-select: none;
+  font-size: 20px;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+  box-sizing: border-box; /* ボーダーやパディングを含めたサイズ計算 */
 }
 
-.board-cell.wall {
+.empty {
+  background-color: #111;
+  box-shadow: inset 0 0 2px #333;
+}
+
+.wall {
   background-color: #333;
-  box-shadow: inset 0 0 5px #000;
+  box-shadow: 0 0 5px #0ff, inset 0 0 5px #0ff;
+  border: 1px solid #0ff;
 }
 
-.board-cell.player {
-  background-color: #00ff00;
+.player {
+  background-color: #0f0;
   color: #000;
-  text-shadow: 0 0 5px #00ff00;
-  box-shadow: 0 0 5px #00ff00, inset 0 0 5px #00ff00;
-}
-
-.board-cell.enemy {
-  background-color: #ff0000;
-  color: #fff;
-  text-shadow: 0 0 5px #ff0000, 0 0 10px #ff0000;
-  box-shadow: 0 0 10px #ff0000, inset 0 0 5px #ff0000;
-  border-radius: 50%;
-  animation: enemy-pulse 1.5s infinite;
-  border: 1px solid #ff6666;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   font-weight: bold;
+  z-index: 10;
+  box-shadow: 0 0 10px #0f0, 0 0 20px #0f0;
+  text-shadow: 0 0 5px #fff;
+  animation: player-pulse 1.5s infinite alternate;
 }
 
-/* 速い敵用のスタイル */
-.board-cell.enemy.fast {
-  background-color: #ff3300;
-  animation: enemy-pulse-fast 1s infinite;
-  box-shadow: 0 0 15px #ff3300, inset 0 0 10px #ff3300;
+@keyframes player-pulse {
+  from {
+    box-shadow: 0 0 5px #0f0, 0 0 10px #0f0;
+  }
+  to {
+    box-shadow: 0 0 10px #0f0, 0 0 20px #0f0, 0 0 30px #0f0;
+  }
+}
+
+.enemy {
+  background-color: #f00;
+  color: #fff;
+  font-weight: bold;
+  z-index: 5;
+  box-shadow: 0 0 10px #f00, 0 0 20px #f00;
+  animation: enemy-pulse 1.5s infinite alternate;
 }
 
 @keyframes enemy-pulse {
-  0% {
-    box-shadow: 0 0 5px #ff0000, inset 0 0 5px #ff0000;
+  from {
+    box-shadow: 0 0 5px #f00, 0 0 10px #f00;
   }
-  50% {
-    box-shadow: 0 0 15px #ff0000, inset 0 0 10px #ff0000;
-  }
-  100% {
-    box-shadow: 0 0 5px #ff0000, inset 0 0 5px #ff0000;
+  to {
+    box-shadow: 0 0 10px #f00, 0 0 20px #f00, 0 0 30px #f00;
   }
 }
 
-@keyframes enemy-pulse-fast {
-  0% {
-    box-shadow: 0 0 8px #ff3300, inset 0 0 8px #ff3300;
+.enemy.fast {
+  background-color: #f80;
+  box-shadow: 0 0 10px #f80, 0 0 20px #f80;
+  animation: fast-enemy-pulse 1s infinite alternate;
+}
+
+@keyframes fast-enemy-pulse {
+  from {
+    box-shadow: 0 0 5px #f80, 0 0 10px #f80;
   }
-  50% {
-    box-shadow: 0 0 20px #ff3300, inset 0 0 15px #ff3300;
-  }
-  100% {
-    box-shadow: 0 0 8px #ff3300, inset 0 0 8px #ff3300;
+  to {
+    box-shadow: 0 0 10px #f80, 0 0 20px #f80, 0 0 30px #f80;
   }
 }
 
-.board-cell.kanji {
-  background-color: #111;
+.kanji {
+  background-color: #08f;
   color: #fff;
-  border: 1px solid #444;
-  text-shadow: 0 0 2px #fff;
+  font-weight: bold;
+  box-shadow: 0 0 5px #08f;
 }
 
-.board-cell.highlight {
-  background-color: rgba(0, 255, 0, 0.1);
-  box-shadow: inset 0 0 5px rgba(0, 255, 0, 0.3);
+.next-kanji {
+  animation: next-kanji-glow 1s infinite alternate;
 }
 
-.board-cell.next-kanji {
-  background-color: #ffff00;
-  color: #000;
-  animation: neon-pulse 1.5s infinite;
-  box-shadow: 0 0 10px #ffff00, inset 0 0 5px #ffff00;
-}
-
-@keyframes neon-pulse {
-  0% {
-    box-shadow: 0 0 5px #ffff00, 0 0 10px #ffff00;
+@keyframes next-kanji-glow {
+  from {
+    box-shadow: 0 0 5px #08f, 0 0 10px #08f;
   }
-  50% {
-    box-shadow: 0 0 15px #ffff00, 0 0 20px #ffff00;
-  }
-  100% {
-    box-shadow: 0 0 5px #ffff00, 0 0 10px #ffff00;
+  to {
+    box-shadow: 0 0 10px #08f, 0 0 20px #08f, 0 0 30px #08f;
+    text-shadow: 0 0 5px #fff, 0 0 10px #fff;
   }
 }
 
-.game-message {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background-color: rgba(0, 0, 0, 0.85);
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 0 20px #ff00ff, inset 0 0 10px #ff00ff;
-  border: 1px solid #ff00ff;
-  text-align: center;
-  z-index: 100;
-  color: white;
+.highlight {
+  background-color: rgba(0, 255, 255, 0.1);
+  box-shadow: inset 0 0 5px #0ff;
 }
 
-.game-message h2 {
-  color: #ff00ff;
-  margin-top: 0;
-  text-shadow: 0 0 5px #ff00ff, 0 0 10px #ff00ff;
+.game-controls {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
 }
 
-.game-message p {
-  margin-bottom: 15px;
-  text-shadow: 0 0 2px #fff;
-}
-
-.game-message button {
-  background-color: #00ffff;
-  color: #000;
-  border: none;
+.game-button {
   padding: 10px 20px;
-  margin-top: 10px;
-  border-radius: 5px;
+  background-color: #08f;
+  color: white;
+  border: none;
+  border-radius: 4px;
   cursor: pointer;
   font-size: 16px;
-  box-shadow: 0 0 10px #00ffff;
-  text-shadow: 0 0 2px #000;
-  transition: all 0.3s ease;
+  transition: all 0.3s;
+  box-shadow: 0 0 5px #08f, 0 0 10px #08f;
 }
 
-.game-message button:hover {
-  background-color: #00cccc;
-  box-shadow: 0 0 15px #00ffff;
+.game-button:hover {
+  background-color: #0af;
+  box-shadow: 0 0 10px #0af, 0 0 20px #0af;
+}
+
+.game-over-overlay, .game-won-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  color: white;
+  font-size: 24px;
+  text-shadow: 0 0 5px #f00, 0 0 10px #f00;
+}
+
+.game-won-overlay {
+  text-shadow: 0 0 5px #0f0, 0 0 10px #0f0;
+}
+
+.game-over-overlay h2, .game-won-overlay h2 {
+  font-size: 36px;
+  margin-bottom: 20px;
 }
 
 .game-instructions {
-  margin-top: 5px;
-  padding: 8px;
-  background-color: #111;
-  border-radius: 5px;
-  width: 100%;
+  margin-top: 20px;
+  padding: 15px;
+  background-color: rgba(0, 0, 0, 0.7);
+  border-radius: 4px;
   max-width: 600px;
-  font-size: 14px;
-  border: 1px solid #00ffff;
-  box-shadow: 0 0 10px #00ffff;
+  border: 1px solid #0ff;
+  box-shadow: 0 0 5px #0ff;
 }
 
 .game-instructions h3 {
   margin-top: 0;
-  margin-bottom: 8px;
-  color: #00ffff;
-  text-shadow: 0 0 5px #00ffff;
+  color: #0ff;
+  text-shadow: 0 0 5px #0ff;
 }
 
 .game-instructions p {
   margin: 5px 0;
-  color: #ccc;
+  color: #fff;
 }
 
-/* モバイル用のスタイル */
-.mobile-view {
-  width: 265px;
-  height: 265px;
-  box-sizing: content-box;
-}
-
-.direction-controls {
-  margin-top: 10px;
-  width: 150px;
-  height: 150px;
-}
-
-.direction-row {
-  display: flex;
-  height: 50px;
+.mobile-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 60px);
+  grid-template-rows: repeat(3, 60px);
+  gap: 5px;
+  margin-top: 20px;
 }
 
 .direction-button {
-  width: 50px;
-  height: 50px;
-  background-color: #111;
+  width: 60px;
+  height: 60px;
+  background-color: #08f;
+  color: white;
+  border: none;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 24px;
   cursor: pointer;
-  user-select: none;
-  border-radius: 5px;
-  color: #00ffff;
-  border: 1px solid #00ffff;
-  box-shadow: 0 0 5px #00ffff;
-  text-shadow: 0 0 5px #00ffff;
-  transition: all 0.2s ease;
-}
-
-.direction-button:hover {
-  background-color: #222;
-  box-shadow: 0 0 10px #00ffff;
+  box-shadow: 0 0 5px #08f, 0 0 10px #08f;
 }
 
 .direction-button:active {
-  background-color: #00ffff;
-  color: #000;
+  background-color: #0af;
+  box-shadow: 0 0 10px #0af, 0 0 20px #0af;
 }
 
-.direction-spacer, .direction-center {
-  width: 50px;
-  height: 50px;
+.up-button {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.left-button {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.right-button {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.down-button {
+  grid-column: 2;
+  grid-row: 3;
 }
 
 @media (max-width: 768px) {
-  .game-info {
-    font-size: 14px;
+  .game-board {
+    grid-template-columns: repeat(7, 35px);
+    grid-template-rows: repeat(7, 35px);
+    gap: 1px;
+    grid-auto-rows: 35px; /* モバイル用の自動行高さ */
   }
   
   .board-cell {
@@ -273,19 +270,64 @@
     font-size: 18px;
   }
   
-  .mobile-view {
-    width: 265px;
-    height: 265px;
-    box-sizing: content-box;
-    border-width: 1px;
+  .game-info {
+    font-size: 14px;
   }
-  
-  .game-instructions {
-    font-size: 12px;
-    padding: 8px;
+}
+.game-message {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(0, 0, 0, 0.9);
+  border: 2px solid #0ff;
+  box-shadow: 0 0 20px #0ff, 0 0 40px rgba(0, 255, 255, 0.5);
+  padding: 30px;
+  border-radius: 10px;
+  text-align: center;
+  z-index: 1000;
+  min-width: 300px;
+  animation: popup-glow 1.5s infinite alternate;
+}
+
+@keyframes popup-glow {
+  from {
+    box-shadow: 0 0 20px #0ff, 0 0 40px rgba(0, 255, 255, 0.5);
   }
-  
-  .direction-controls {
-    margin-top: 10px;
+  to {
+    box-shadow: 0 0 30px #0ff, 0 0 60px rgba(0, 255, 255, 0.7);
   }
+}
+
+.game-message h2 {
+  color: #0ff;
+  font-size: 32px;
+  margin-top: 0;
+  text-shadow: 0 0 10px #0ff;
+}
+
+.game-message p {
+  color: white;
+  margin-bottom: 20px;
+  font-size: 18px;
+}
+
+.game-message button {
+  background-color: #08f;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 18px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 0 10px #08f;
+}
+
+.game-message button:hover {
+  background-color: #0af;
+  box-shadow: 0 0 15px #0af, 0 0 30px rgba(0, 170, 255, 0.5);
+}
+.board-row {
+  display: contents; /* グリッドレイアウトを維持するために必要 */
 }
