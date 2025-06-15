@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/amazon-q-cli-game/static/css/main.c5dc775b.css",
+    "main.js": "/amazon-q-cli-game/static/js/main.3aacaf26.js",
+    "static/js/453.29e6f8fa.chunk.js": "/amazon-q-cli-game/static/js/453.29e6f8fa.chunk.js",
+    "index.html": "/amazon-q-cli-game/index.html",
+    "main.c5dc775b.css.map": "/amazon-q-cli-game/static/css/main.c5dc775b.css.map",
+    "main.3aacaf26.js.map": "/amazon-q-cli-game/static/js/main.3aacaf26.js.map",
+    "453.29e6f8fa.chunk.js.map": "/amazon-q-cli-game/static/js/453.29e6f8fa.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.c5dc775b.css",
+    "static/js/main.3aacaf26.js"
+  ]
+}
