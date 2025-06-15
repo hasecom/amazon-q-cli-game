@@ -1,0 +1,60 @@
+--- Game.js.orig
++++ Game.js
+@@ -60,6 +60,7 @@
+   const [viewportOffset, setViewportOffset] = useState({ x: 0, y: 0 });
+   const [enemies, setEnemies] = useState([]);
+   const [nextKanjiTimer, setNextKanjiTimer] = useState(null);
++  const [playerMoveCount, setPlayerMoveCount] = useState(0); // プレイヤーの移動回数をカウント
+   const [kanjiActive, setKanjiActive] = useState(true); // 漢字が取得可能かどうか
+   const [lastPlayerMoveTime, setLastPlayerMoveTime] = useState(0); // プレイヤーの最後の移動時間
+ 
+@@ -701,6 +702,7 @@
+       setViewportOffset({ x: 0, y: 0 });
+       setCurrentStrokeCount(1);
+       setRemainingKanji(kanjiCount);
++      setPlayerMoveCount(0); // プレイヤーの移動回数をリセット
+       
+       // 最初の漢字を選択
+       const firstKanji = selectRandomKanji(1);
+@@ -1032,7 +1034,7 @@
+         <p>正しい漢字を取ると、その漢字は消えます。</p>
+         <p>漢字を取ると、次の漢字のヒント（光る表示）は30秒後に表示されます。</p>
+         <p>赤い「敵」キャラクターはプレイヤーを追いかけてきます。</p>
+-        <p>敵はプレイヤーが動くと一緒に動き、停止中は1秒ごとに1マス移動します。</p>
++        <p>敵はプレイヤーが2歩（2マス）進むと1マス移動します。停止中は1秒ごとに1マス移動します。</p>
+         <p>敵に捕まるとゲームオーバーです。</p>
+         <p>レベル1では敵は2体、レベルが上がるごとに敵の数が増えます（最大4体）。</p>
+         <p>すべての漢字を集めるとレベルクリアです。</p>
+@@ -421,6 +421,15 @@
+       // 新しい位置にプレイヤーを配置
+       newBoard[newY][newX] = { type: 'player' };
+       
++      // プレイヤーの移動回数を更新
++      const newMoveCount = playerMoveCount + 1;
++      setPlayerMoveCount(newMoveCount);
++      
++      // 2. 敵の移動（プレイヤーが2回移動するごとに敵が1回移動）
++      if (newMoveCount % 2 === 0) {
++      
++      } else {
++      
+       // 2. 敵の移動
+       for (let i = 0; i < newEnemies.length; i++) {
+         const enemy = newEnemies[i];
+@@ -600,6 +609,7 @@
+           };
+         }
+       }
++      }
+       
+       // 3. 状態を更新
+       setGameBoard(newBoard);
+@@ -619,6 +629,7 @@
+     score, 
+     selectRandomKanji, 
+     startKanjiTimer, 
+-    updateHighlightCells
++    updateHighlightCells,
++    playerMoveCount
+   ]);
+ 

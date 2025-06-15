@@ -1,0 +1,25 @@
+      
+      // 3. 状態を更新
+      setGameBoard(newBoard);
+      setPlayerPosition({ x: newX, y: newY });
+      setEnemies(newEnemies);
+      
+      // 4. 移動可能なセルを更新
+      updateHighlightCells({ x: newX, y: newY });
+      
+      // 5. プレイヤーの最終移動時間を更新
+      setLastPlayerMoveTime(Date.now());
+    }
+  }, [
+    boardSize, 
+    gameBoard, 
+    playerPosition, 
+    enemies, 
+    currentStrokeCount, 
+    remainingKanji, 
+    score, 
+    selectRandomKanji, 
+    startKanjiTimer, 
+    updateHighlightCells,
+    playerMoveCount
+  ]);

@@ -1,0 +1,209 @@
+  const movePlayerAndEnemies = useCallback((newX, newY) => {
+    // 移動先が有効かチェック
+    if (
+      newX >= 0 && 
+      newX < boardSize && 
+      newY >= 0 && 
+      newY < boardSize && 
+      gameBoard && 
+      gameBoard[newY]
+    ) {
+      const targetCell = gameBoard[newY][newX];
+      
+      // 壁には移動できない
+      if (targetCell && targetCell.type === 'wall') {
+        return;
+      }
+      
+      // 敵のセルの場合
+      if (targetCell && targetCell.type === 'enemy') {
+        setGameOver(true);
+        return;
+      }
+      
+      // 漢字のセルの場合
+      if (targetCell && targetCell.type === 'kanji') {
+        // 現在の画数の漢字の場合のみ取得可能
+        if (targetCell.strokeCount === currentStrokeCount) {
+          // 正しい画数の漢字を取得
+          setScore(score + currentStrokeCount * 100); // 画数に応じたスコア
+          setRemainingKanji(remainingKanji - 1);
+          setCurrentStrokeCount(currentStrokeCount + 1);
+          
+          // 次の漢字を選択
+          const nextKanji = selectRandomKanji(currentStrokeCount + 1);
+          setCurrentKanji(nextKanji);
+          
+          // 漢字ヒントタイマーを開始（最初の漢字以外）
+          if (currentStrokeCount > 1 || remainingKanji > 1) {
+            startKanjiTimer();
+          }
+          
+          // すべての漢字を集めたらレベルクリア
+          if (remainingKanji - 1 <= 0) {
+            setGameWon(true);
+            return;
+          }
+        } else {
+          // 間違った画数の漢字を取ろうとした場合はゲームオーバー
+          setGameOver(true);
+          return;
+        }
+      }
+      
+      // 現在のゲームボードの状態をコピー
+      const newBoard = [...gameBoard];
+      const newEnemies = [...enemies];
+      
+      // 1. プレイヤーの移動
+      // 現在位置のプレイヤーを削除
+      newBoard[playerPosition.y][playerPosition.x] = null;
+      
+      // 新しい位置にプレイヤーを配置
+      newBoard[newY][newX] = { type: 'player' };
+      
+      // プレイヤーの移動回数を更新
+      const newMoveCount = playerMoveCount + 1;
+      setPlayerMoveCount(newMoveCount);
+      
+      // 2. 敵の移動（プレイヤーが2回移動するごとに敵が1回移動）
+      if (newMoveCount % 2 === 0) {
+        for (let i = 0; i < newEnemies.length; i++) {
+          const enemy = newEnemies[i];
+          
+          // 現在の敵の位置をボードから削除
+          if (
+            enemy.x >= 0 && 
+            enemy.x < boardSize && 
+            enemy.y >= 0 && 
+            enemy.y < boardSize &&
+            newBoard[enemy.y][enemy.x] && 
+            newBoard[enemy.y][enemy.x].type === 'enemy'
+          ) {
+            // 敵が漢字の上にいた場合、漢字を復元
+            if (newBoard[enemy.y][enemy.x].onKanji) {
+              newBoard[enemy.y][enemy.x] = newBoard[enemy.y][enemy.x].onKanji;
+            } else {
+              newBoard[enemy.y][enemy.x] = null;
+            }
+          }
+          
+          // プレイヤーに近づく最適な方向を見つける
+          let bestDirection = { x: 0, y: 0 };
+          let minDistance = Number.MAX_VALUE;
+          
+          // 可能な移動方向
+          const directions = [
+            { x: 0, y: -1 }, // 上
+            { x: 0, y: 1 },  // 下
+            { x: -1, y: 0 }, // 左
+            { x: 1, y: 0 }   // 右
+          ];
+          
+          // プレイヤーに最も近づく方向を選択（新しいプレイヤー位置に基づく）
+          for (const dir of directions) {
+            const nextX = enemy.x + dir.x;
+            const nextY = enemy.y + dir.y;
+            
+            // ボード内かつ壁でなく、他の敵もいない場所
+            if (
+              nextX >= 0 && 
+              nextX < boardSize && 
+              nextY >= 0 && 
+              nextY < boardSize
+            ) {
+              const cell = newBoard[nextY][nextX];
+              if (!cell || 
+                  (cell.type !== 'wall' && cell.type !== 'enemy') || 
+                  cell.type === 'player') {
+                
+                // 新しいプレイヤー位置までの距離を計算
+                const distance = Math.abs(nextX - newX) + Math.abs(nextY - newY);
+                
+                // より近い方向を選択
+                if (distance < minDistance) {
+                  minDistance = distance;
+                  bestDirection = dir;
+                }
+              }
+            }
+          }
+          
+          // 移動先の座標
+          const nextX = enemy.x + bestDirection.x;
+          const nextY = enemy.y + bestDirection.y;
+          
+          // 移動先が有効な場合のみ移動
+          if (
+            nextX >= 0 && 
+            nextX < boardSize && 
+            nextY >= 0 && 
+            nextY < boardSize
+          ) {
+            const targetCell = newBoard[nextY][nextX];
+            
+            // プレイヤーに当たった場合
+            if (targetCell && targetCell.type === 'player') {
+              setGameOver(true);
+              return;
+            }
+            
+            // 移動先が壁でなく、他の敵もいない場合
+            if (!targetCell || (targetCell.type !== 'wall' && targetCell.type !== 'enemy')) {
+              // 敵を新しい位置に移動
+              newEnemies[i] = { ...enemy, x: nextX, y: nextY };
+              
+              // 移動先に漢字がある場合は、敵が漢字の上に乗る（漢字は消さない）
+              if (targetCell && targetCell.type === 'kanji') {
+                newBoard[nextY][nextX] = { 
+                  type: 'enemy',
+                  speed: enemy.speed,
+                  onKanji: targetCell // 漢字の情報を保持
+                };
+              } else {
+                newBoard[nextY][nextX] = { 
+                  type: 'enemy',
+                  speed: enemy.speed
+                };
+              }
+            } else {
+              // 移動できない場合は元の位置に戻す
+              newBoard[enemy.y][enemy.x] = { 
+                type: 'enemy',
+                speed: enemy.speed
+              };
+            }
+          } else {
+            // ボード外の場合は元の位置に戻す
+            newBoard[enemy.y][enemy.x] = { 
+              type: 'enemy',
+              speed: enemy.speed
+            };
+          }
+        }
+      }
+      
+      // 3. 状態を更新
+      setGameBoard(newBoard);
+      setPlayerPosition({ x: newX, y: newY });
+      setEnemies(newEnemies);
+      
+      // 4. 移動可能なセルを更新
+      updateHighlightCells({ x: newX, y: newY });
+      
+      // 5. プレイヤーの最終移動時間を更新
+      setLastPlayerMoveTime(Date.now());
+    }
+  }, [
+    boardSize, 
+    gameBoard, 
+    playerPosition, 
+    enemies, 
+    currentStrokeCount, 
+    remainingKanji, 
+    score, 
+    selectRandomKanji, 
+    startKanjiTimer, 
+    updateHighlightCells,
+    playerMoveCount
+  ]);

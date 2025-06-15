@@ -1,0 +1,33 @@
+          
+          // プレイヤーに最も近づく方向を選択（新しいプレイヤー位置に基づく）
+          for (const dir of directions) {
+            const nextX = enemy.x + dir.x;
+            const nextY = enemy.y + dir.y;
+            
+            // ボード内かつ壁でなく、他の敵もいない場所
+            if (
+              nextX >= 0 && 
+              nextX < boardSize && 
+              nextY >= 0 && 
+              nextY < boardSize
+            ) {
+              const cell = newBoard[nextY][nextX];
+              if (!cell || 
+                  (cell.type !== 'wall' && cell.type !== 'enemy') || 
+                  cell.type === 'player') {
+                
+                // 新しいプレイヤー位置までの距離を計算
+                const distance = Math.abs(nextX - newX) + Math.abs(nextY - newY);
+                
+                // より近い方向を選択
+                if (distance < minDistance) {
+                  minDistance = distance;
+                  bestDirection = dir;
+                }
+              }
+            }
+          }
+          
+          // 移動先の座標
+          const nextX = enemy.x + bestDirection.x;
+          const nextY = enemy.y + bestDirection.y;

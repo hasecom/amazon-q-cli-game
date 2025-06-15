@@ -1,0 +1,50 @@
+          
+          // 移動先が有効な場合のみ移動
+          if (
+            nextX >= 0 && 
+            nextX < boardSize && 
+            nextY >= 0 && 
+            nextY < boardSize
+          ) {
+            const targetCell = newBoard[nextY][nextX];
+            
+            // プレイヤーに当たった場合
+            if (targetCell && targetCell.type === 'player') {
+              setGameOver(true);
+              return;
+            }
+            
+            // 移動先が壁でなく、他の敵もいない場合
+            if (!targetCell || (targetCell.type !== 'wall' && targetCell.type !== 'enemy')) {
+              // 敵を新しい位置に移動
+              newEnemies[i] = { ...enemy, x: nextX, y: nextY };
+              
+              // 移動先に漢字がある場合は、敵が漢字の上に乗る（漢字は消さない）
+              if (targetCell && targetCell.type === 'kanji') {
+                newBoard[nextY][nextX] = { 
+                  type: 'enemy',
+                  speed: enemy.speed,
+                  onKanji: targetCell // 漢字の情報を保持
+                };
+              } else {
+                newBoard[nextY][nextX] = { 
+                  type: 'enemy',
+                  speed: enemy.speed
+                };
+              }
+            } else {
+              // 移動できない場合は元の位置に戻す
+              newBoard[enemy.y][enemy.x] = { 
+                type: 'enemy',
+                speed: enemy.speed
+              };
+            }
+          } else {
+            // ボード外の場合は元の位置に戻す
+            newBoard[enemy.y][enemy.x] = { 
+              type: 'enemy',
+              speed: enemy.speed
+            };
+          }
+        }
+      }

@@ -1,0 +1,67 @@
+  const movePlayerAndEnemies = useCallback((newX, newY) => {
+    // 移動先が有効かチェック
+    if (
+      newX >= 0 && 
+      newX < boardSize && 
+      newY >= 0 && 
+      newY < boardSize && 
+      gameBoard && 
+      gameBoard[newY]
+    ) {
+      const targetCell = gameBoard[newY][newX];
+      
+      // 壁には移動できない
+      if (targetCell && targetCell.type === 'wall') {
+        return;
+      }
+      
+      // 敵のセルの場合
+      if (targetCell && targetCell.type === 'enemy') {
+        setGameOver(true);
+        return;
+      }
+      
+      // 漢字のセルの場合
+      if (targetCell && targetCell.type === 'kanji') {
+        // 現在の画数の漢字の場合のみ取得可能
+        if (targetCell.strokeCount === currentStrokeCount) {
+          // 正しい画数の漢字を取得
+          setScore(score + currentStrokeCount * 100); // 画数に応じたスコア
+          setRemainingKanji(remainingKanji - 1);
+          setCurrentStrokeCount(currentStrokeCount + 1);
+          
+          // 次の漢字を選択
+          const nextKanji = selectRandomKanji(currentStrokeCount + 1);
+          setCurrentKanji(nextKanji);
+          
+          // 漢字ヒントタイマーを開始（最初の漢字以外）
+          if (currentStrokeCount > 1 || remainingKanji > 1) {
+            startKanjiTimer();
+          }
+          
+          // すべての漢字を集めたらレベルクリア
+          if (remainingKanji - 1 <= 0) {
+            setGameWon(true);
+            return;
+          }
+        } else {
+          // 間違った画数の漢字を取ろうとした場合はゲームオーバー
+          setGameOver(true);
+          return;
+        }
+      }
+      
+      // 現在のゲームボードの状態をコピー
+      const newBoard = [...gameBoard];
+      const newEnemies = [...enemies];
+      
+      // 1. プレイヤーの移動
+      // 現在位置のプレイヤーを削除
+      newBoard[playerPosition.y][playerPosition.x] = null;
+      
+      // 新しい位置にプレイヤーを配置
+      newBoard[newY][newX] = { type: 'player' };
+      
+      // プレイヤーの移動回数を更新
+      const newMoveCount = playerMoveCount + 1;
+      setPlayerMoveCount(newMoveCount);
